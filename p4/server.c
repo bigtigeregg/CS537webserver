@@ -1,6 +1,6 @@
 #include "cs537.h"
 #include "request.h"
-
+#include <pthread.h>
 // 
 // server.c: A very, very simple web server
 //
@@ -16,47 +16,56 @@ void getargs(int *port,int *threadnums, int *buffernums, int argc, char *argv[])
 {
     if (argc != 4) {
 	fprintf(stderr, "Usage: %s <port> <threadnums> <buffernums> \n", argv[0]);
-	*threadnums = argv[1];
-	*buffernums = argv[2];
+
 	exit(1);
     }
+    *threadnums = atoi(argv[1]);
+	*buffernums = atoi(argv[2]);
     *port = atoi(argv[1]);
 }
 
 
 void *producer(void *arg){
-	int i;
-	for(i = 0; i < loops; i++){
-		Pthread_mutex_lock(&mutex);
-		while(count == MAX)
-			Pthread_cond_wait(&empty, &mutex);
-		put(i);
-		Pthread_cond_signal(&fill);
-		Pthread_mutex_unlock(&mutex);
+	int connfd;
+	struct sockaddr_in clientaddr;
+	while(1){
+		listenfd = Open_listenfd(port);
+		clientlen = sizeof(clientaddr);
+		pthread_mutex_lock(&mutex);
+		connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
+		while(count == buffers_nums)
+			pthread_cond_wait(&empty, &mutex);
+		produce(connfd);
+		pthread_cond_signal(&fill);
+		pthread_mutex_unlock(&mutex);
 	}
 }
 
-void produce(){
-
+void produce(int connfd){
+	sharedBuffer.connfid[sharedBuffer.count] = connfd;
+	sharedBuffer.count = sharedBuffer.count + 1;
 }
 
 
 void *consumer(void *arg){
-	int i;
-	for(i = 0; i < loops; i++){
+	while(1){
+		printf("consumer\n");
 		pthread_mutex_lock(&mutex);
+		// buffer is empty?
 		while(count == 0)
-			Pthread_cond_wait(&fill ,&mutex);
-		int tmp = get();
-		Pthread_cond_signal(&empty);
-		Pthread_mutex_unlock(&mutex);
+			pthread_cond_wait(&fill ,&mutex);
+		int getconnfd = consume();
+		pthread_cond_signal(&empty);
+		pthread_mutex_unlock(&mutex);
+		requestHandle(getconnfd);
+		Close(getconnfd);
 	}
 }
 
 int consume(){
-	int tmp = buffer[use];
-	use = (use + 1) % buffers_nums;
-	count--;
+	int tmp = sharedBuffer.connfid[sharedBuffer.head];
+	sharedBuffer.head = (sharedBuffer.head + 1) % sharedBuffer.buffer_size;
+	sharedBuffer.count = sharedBuffer.count -1;
 	return tmp;
 }
 
@@ -64,48 +73,60 @@ int consume(){
 
 int main(int argc, char *argv[])
 {
-    int listenfd, connfd, port, clientlen;
-    struct sockaddr_in clientaddr;
+    
+   // struct sockaddr_in clientaddr;
+    
+    
+	// pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	// pthread_cond_t fill = PTHREAD_COND_INITIALIZER;
+	// pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
 
-    struct thread_info *tinfo;
+    pthread_mutex_init(&mutex, NULL);
+    getargs(&port,&threads_nums, &buffers_nums, argc, argv);
+    
 
-    getargs(&port,&threadnums, &buffers_nums, argc, argv);
-
-
-
+    sharedBuffer.buffer_size = buffers_nums;
+    sharedBuffer.count = 0;
+    sharedBuffer.head = 0;
     // 
     // CS537: Create some threads...
     //
     pthread_t *threads;
+    pthread_t pid;
+    pthread_create(&pid, NULL, producer, NULL);
 
     // tinfo = calloc(num_threads, sizeof(struct thread_info));
     // 	if (tinfo == NULL)
     // 		 handle_error("calloc");
 
     threads = (pthread_t *)malloc(sizeof(pthread_t)*threads_nums);
-    for(int i = 0; i < threadnums;i++){
-    	
+    for(int i = 0; i < threads_nums;i++){
     	pthread_create(&threads[i],NULL,consumer,NULL);
     }
-
     listenfd = Open_listenfd(port);
+ 	// while (1) {
+	// clientlen = sizeof(clientaddr);
+	// connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
+	// // 
+	// // CS537: In general, don't handle the request in the main thread.
+	// // Save the relevant info in a buffer and have one of the worker threads 
+	// // do the work. However, for SFF, you may have to do a little work
+	// // here (e.g., a stat() on the filename) ...
+	// // 
+	// requestHandle(connfd);
+	// Close(connfd);
+ //    }
+}
 
-    while (1) {
-	clientlen = sizeof(clientaddr);
-	connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
-	// 
-	// CS537: In general, don't handle the request in the main thread.
-	// Save the relevant info in a buffer and have one of the worker threads 
-	// do the work. However, for SFF, you may have to do a little work
-	// here (e.g., a stat() on the filename) ...
-	// 
-	requestHandle(connfd);
-	Close(connfd);
-    }
+void print_buf(){
+	printf("buf:\n");
+	for(int i=0; i < sharedBuffer.buffer_size;i++)
+	{
+		printf("%d\n",sharedBuffer.connfid[i]);
+	}
+	printf("\n");
 }
 
 
-    
 
 
- 
