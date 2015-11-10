@@ -95,9 +95,7 @@ int main(int argc, char *argv[])
     pthread_t pid;
     pthread_create(&pid, NULL, producer, NULL);
 
-    // tinfo = calloc(num_threads, sizeof(struct thread_info));
-    // 	if (tinfo == NULL)
-    // 		 handle_error("calloc");
+
 
     threads = (pthread_t *)malloc(sizeof(pthread_t)*threads_nums);
     for(int i = 0; i < threads_nums;i++){
