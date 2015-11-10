@@ -26,14 +26,13 @@ void getargs(int *port,int *threadnums, int *buffernums, int argc, char *argv[])
 
 
 void *producer(void *arg){
-	int connfd;
-	struct sockaddr_in clientaddr;
+	
+	listenfd = Open_listenfd(port);
 	while(1){
-		listenfd = Open_listenfd(port);
 		clientlen = sizeof(clientaddr);
 		pthread_mutex_lock(&mutex);
 		connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
-		while(count == buffers_nums)
+		while(sharedBuffer.count == buffers_nums)
 			pthread_cond_wait(&empty, &mutex);
 		produce(connfd);
 		pthread_cond_signal(&fill);
@@ -42,19 +41,19 @@ void *producer(void *arg){
 }
 
 void produce(int connfd){
-	sharedBuffer.connfid[sharedBuffer.count] = connfd;
+	
+	sharedBuffer.connfd[sharedBuffer.head] = connfd;
 	sharedBuffer.count = sharedBuffer.count + 1;
 }
 
 
 void *consumer(void *arg){
 	while(1){
-		printf("consumer\n");
+	//	printf("consumer\n");
 		pthread_mutex_lock(&mutex);
-		// buffer is empty?
-		while(count == 0)
+		while(sharedBuffer.count == 0)
 			pthread_cond_wait(&fill ,&mutex);
-		int getconnfd = consume();
+		getconnfd = consume();
 		pthread_cond_signal(&empty);
 		pthread_mutex_unlock(&mutex);
 		requestHandle(getconnfd);
@@ -63,9 +62,10 @@ void *consumer(void *arg){
 }
 
 int consume(){
-	int tmp = sharedBuffer.connfid[sharedBuffer.head];
+	printf("consume\n");
+	int tmp = sharedBuffer.connfd[sharedBuffer.head];
 	sharedBuffer.head = (sharedBuffer.head + 1) % sharedBuffer.buffer_size;
-	sharedBuffer.count = sharedBuffer.count -1;
+	sharedBuffer.count = sharedBuffer.count - 1;
 	return tmp;
 }
 
@@ -84,10 +84,10 @@ int main(int argc, char *argv[])
     pthread_mutex_init(&mutex, NULL);
     getargs(&port,&threads_nums, &buffers_nums, argc, argv);
     
-
     sharedBuffer.buffer_size = buffers_nums;
     sharedBuffer.count = 0;
     sharedBuffer.head = 0;
+    sharedBuffer.connfd = NULL;
     // 
     // CS537: Create some threads...
     //
@@ -103,7 +103,11 @@ int main(int argc, char *argv[])
     for(int i = 0; i < threads_nums;i++){
     	pthread_create(&threads[i],NULL,consumer,NULL);
     }
-    listenfd = Open_listenfd(port);
+
+
+
+
+    //listenfd = Open_listenfd(port);
  	// while (1) {
 	// clientlen = sizeof(clientaddr);
 	// connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
@@ -118,14 +122,6 @@ int main(int argc, char *argv[])
  //    }
 }
 
-void print_buf(){
-	printf("buf:\n");
-	for(int i=0; i < sharedBuffer.buffer_size;i++)
-	{
-		printf("%d\n",sharedBuffer.connfid[i]);
-	}
-	printf("\n");
-}
 
 
 
