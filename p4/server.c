@@ -16,7 +16,6 @@ void getargs(int *port,int *threadnums, int *buffernums, int argc, char *argv[])
 {
     if (argc != 4) {
 	fprintf(stderr, "Usage: %s <port> <threadnums> <buffernums> \n", argv[0]);
-
 	exit(1);
     }
     *threadnums = atoi(argv[1]);
@@ -27,8 +26,9 @@ void getargs(int *port,int *threadnums, int *buffernums, int argc, char *argv[])
 
 void *producer(void *arg){
 	
-	listenfd = Open_listenfd(port);
+	
 	while(1){
+		listenfd = Open_listenfd(port);
 		clientlen = sizeof(clientaddr);
 		pthread_mutex_lock(&mutex);
 		connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
