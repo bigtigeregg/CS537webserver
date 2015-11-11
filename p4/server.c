@@ -1,6 +1,5 @@
 #include "cs537.h"
 #include "request.h"
-#include <pthread.h>
 // 
 // server.c: A very, very simple web server
 //
@@ -12,23 +11,22 @@
 //
 
 // CS537: Parse the new arguments too
+int *bufferconnd;
 void getargs(int *port,int *threadnums, int *buffernums, int argc, char *argv[])
 {
     if (argc != 4) {
 	fprintf(stderr, "Usage: %s <port> <threadnums> <buffernums> \n", argv[0]);
 	exit(1);
     }
-    *threadnums = atoi(argv[1]);
-	*buffernums = atoi(argv[2]);
     *port = atoi(argv[1]);
+    *threadnums = atoi(argv[2]);
+    *buffernums = atoi(argv[3]);
 }
 
 
 void *producer(void *arg){
-	
-	
+	int connfd;
 	while(1){
-		listenfd = Open_listenfd(port);
 		clientlen = sizeof(clientaddr);
 		pthread_mutex_lock(&mutex);
 		connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
@@ -41,15 +39,16 @@ void *producer(void *arg){
 }
 
 void produce(int connfd){
-	
-	sharedBuffer.connfd[sharedBuffer.head] = connfd;
-	sharedBuffer.count = sharedBuffer.count + 1;
+//	sharedBuffer.connfd[sharedBuffer.tail] = connfd;
+    bufferconnd[sharedBuffer.tail] = connfd;
+    sharedBuffer.tail = (sharedBuffer.tail + 1) % sharedBuffer.buffer_size;
+    sharedBuffer.count = sharedBuffer.count + 1;
 }
 
 
 void *consumer(void *arg){
+	int getconnfd;
 	while(1){
-	//	printf("consumer\n");
 		pthread_mutex_lock(&mutex);
 		while(sharedBuffer.count == 0)
 			pthread_cond_wait(&fill ,&mutex);
@@ -62,62 +61,38 @@ void *consumer(void *arg){
 }
 
 int consume(){
-	printf("consume\n");
-	int tmp = sharedBuffer.connfd[sharedBuffer.head];
+	//int tmp = sharedBuffer.connfd[sharedBuffer.head];
+    int tmp = bufferconnd[sharedBuffer.head];
 	sharedBuffer.head = (sharedBuffer.head + 1) % sharedBuffer.buffer_size;
 	sharedBuffer.count = sharedBuffer.count - 1;
 	return tmp;
 }
 
 
-
 int main(int argc, char *argv[])
 {
-    
-   // struct sockaddr_in clientaddr;
-    
-    
-	// pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	// pthread_cond_t fill = PTHREAD_COND_INITIALIZER;
-	// pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
-
     pthread_mutex_init(&mutex, NULL);
+    pthread_cond_init(&fill, NULL);
+    pthread_cond_init(&empty, NULL);
     getargs(&port,&threads_nums, &buffers_nums, argc, argv);
-    
+    bufferconnd = (int *)malloc(sizeof(int)*buffers_nums);
+
     sharedBuffer.buffer_size = buffers_nums;
     sharedBuffer.count = 0;
     sharedBuffer.head = 0;
-    sharedBuffer.connfd = NULL;
+    sharedBuffer.tail = 0;
     // 
     // CS537: Create some threads...
     //
     pthread_t *threads;
     pthread_t pid;
     pthread_create(&pid, NULL, producer, NULL);
-
-
-
+    listenfd = Open_listenfd(port);
     threads = (pthread_t *)malloc(sizeof(pthread_t)*threads_nums);
     for(int i = 0; i < threads_nums;i++){
     	pthread_create(&threads[i],NULL,consumer,NULL);
     }
-
-
-
-
-    //listenfd = Open_listenfd(port);
- 	// while (1) {
-	// clientlen = sizeof(clientaddr);
-	// connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
-	// // 
-	// // CS537: In general, don't handle the request in the main thread.
-	// // Save the relevant info in a buffer and have one of the worker threads 
-	// // do the work. However, for SFF, you may have to do a little work
-	// // here (e.g., a stat() on the filename) ...
-	// // 
-	// requestHandle(connfd);
-	// Close(connfd);
- //    }
+	pthread_join(&pid,NULL);
 }
 
 
