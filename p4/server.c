@@ -28,8 +28,8 @@ void *producer(void *arg){
 	int connfd;
 	while(1){
 		clientlen = sizeof(clientaddr);
+        connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
 		pthread_mutex_lock(&mutex);
-		connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
 		while(sharedBuffer.count == buffers_nums)
 			pthread_cond_wait(&empty, &mutex);
 		produce(connfd);
@@ -39,7 +39,6 @@ void *producer(void *arg){
 }
 
 void produce(int connfd){
-//	sharedBuffer.connfd[sharedBuffer.tail] = connfd;
     bufferconnd[sharedBuffer.tail] = connfd;
     sharedBuffer.tail = (sharedBuffer.tail + 1) % sharedBuffer.buffer_size;
     sharedBuffer.count = sharedBuffer.count + 1;
@@ -71,6 +70,7 @@ int consume(){
 
 int main(int argc, char *argv[])
 {
+    int i;
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&fill, NULL);
     pthread_cond_init(&empty, NULL);
@@ -86,10 +86,10 @@ int main(int argc, char *argv[])
     //
     pthread_t *threads;
     pthread_t pid;
-    pthread_create(&pid, NULL, producer, NULL);
     listenfd = Open_listenfd(port);
+    pthread_create(&pid, NULL, producer, NULL);
     threads = (pthread_t *)malloc(sizeof(pthread_t)*threads_nums);
-    for(int i = 0; i < threads_nums;i++){
+    for(i = 0; i < threads_nums;i++){
     	pthread_create(&threads[i],NULL,consumer,NULL);
     }
 	pthread_join(&pid,NULL);

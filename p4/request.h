@@ -1,5 +1,4 @@
 #ifndef __REQUEST_H__
-#include <pthread.h>
 void requestHandle(int fd);
 int threads_nums, buffers_nums;
 int listenfd, port, clientlen;
